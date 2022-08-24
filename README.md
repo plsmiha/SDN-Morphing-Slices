@@ -22,22 +22,22 @@
 - [Group members](#Group-Members)
 
 # Intro
-
-project description:)
+The starting point of this project is a single domain base topology where we have full control of the network. The aim is to generate different slices as overlays of the original topology. This means that the actual base network remains unaltered but the perceived topology is different from the original one. It is important to understand that this is a virtualization process, new links can't be generated in the process of creating a new virtual slice.
+This technique can be useful when a service provider wants to have different topologies on the same physical one.
 
 # Mininet
-We have based our project on a "star like" topology wich gave us the flexibility needed for building on top of that multiple topologies.
-The ones that we've decided to implement are:
+We based our project on a partial mesh topology which gave us the flexibility needed to build multiple slices with different topologies on top of it.
+The topologies that we have decided to implement are:
 - Tree topology
 - Linear topology
 - Star topology
 - Ring topology
 
-The following schema rappresent our base topology built with MININET and the virtual topologies made with RYU-Manager, the red lines are used to easily identify the differences between the base and the current topology. 
-![image info](https://raw.githubusercontent.com/elrich2610/Morphing-Slices/a3d48e770b402eb33f813cfb6ddaa3ae23aef37a/topologie.svg
+Specific base topology built with MININET: 
+![image info](https://raw.githubusercontent.com/elrich2610/Morphing-Slices/794837be2352d91d2fe320bb3c286427ff3cf161/base.svg
 )
 
-Below a table rappresenting the ports/device connection of every switch
+Table that maps each connection on the right port for every switch of the base topology:
 |HOST|Port 1|Port 2|Port 3|Port 4|
 |:--|:--:|:--:|:--:|:--:|
 **S1**|  H1  | S2  | S3	    |S9
@@ -58,28 +58,30 @@ Below a table rappresenting the ports/device connection of every switch
 git clone https://github.com/elrich2610/Morphing-Slices.git
 cd Morphing-Slices
 ```
-From now on we'll have to work with **2** separate terminals:
+From now on  **2** separate terminals are needed.
+The first terminal is used to run the ryu-controller.
+Each slice has its own ryu-controller, so it is necessary to run the one corresponding to the desired virtual topology.
 
-On your first terminal start the controller which will decide how our virtualTopology will looks like
+
 ```bash
 #Terminal 1
 #virtual topologies: [fullOpen - tree - star - ring - linear]
 ./start.sh [virtual topology name]
 ```
 
-On your second terminal run the mininet topology (the physical topology), once started it'll automatically connect to the mininet console
+On the  second terminal, run the physical base topology created with mininet; once started it'll automatically connect to the mininet console
 ```
 #Terminal 2
 sudo python3 baseTopology.py
 ```
+Now the chosen virtual slice has been created on top of the physical topology.
 
 ### PoC
-Using the "pingall" command we'll see how our packets won't follow the base topology but will run trough the path 
-choosen from our controller AKA our controller has modified the logical topology.
-Another way for checking the actual topology is to use the script "check.sh" which simply dumps the flow for each switch.
+Using the "pingall" command, it is possible to verify the structure of the newly created virtual topology. This command allows you to follow the path of the packets and see that it indeed isn't the one of the base physical topology but the one determined by the running controller.
+Another way to explore the newly created topology is to use the script "check.sh" which simply dumps the flow for each switch.
 
-##### FullOpen:
-The expected result for the basetopology with all the switches in OFPP_FLOOD mode is the following:
+### FullOpen:
+The expected result for the base topology with all the switches in OFPP_FLOOD mode is the following:
 ```txt
 #everything reach everything
 mininet> pingall
@@ -95,9 +97,13 @@ h8 -> h1 h2 h3 h4 h5 h6 h7
 *** Results: 0% dropped (56/56 received)
 ```
 
-##### Tree:
-We are cutting everything that is connected to the swtich 2 and 3 for building a treeTopology (Horizontaly oriented from left to right, root is S1).
-If we want, we can add more deviceS (switches and hosts) to our topology and they will all act accordingly with our controller, answering if they're not connected outside of the (single) path running trough the switches number 9: S1-S9-S10-SN
+### Tree:
+In order to create a slice with a tree topology it is necessary to cut every connection involving S2 or S3.
+The resulting topology is an horizontal tree, oriented from left to right with root S1.
+Even if we wanted to add more devices to the the base topology on the S1-S9-S10 path, the implemented tree-controller is still going to correctly generate a tree topology and the new links would all act accordingly.
+
+![image info](https://raw.githubusercontent.com/elrich2610/Morphing-Slices/794837be2352d91d2fe320bb3c286427ff3cf161/tree.svg
+)
 
 ```txt
 mininet> pingall
@@ -113,7 +119,8 @@ h8 -> h1 X X h4 h5 h6 h7
 *** Results: 46% dropped (30/56 received)
 ```
 
-Dump-flow (only affected switches are reported, the others are empty as they should).
+Dump-flow  
+\*only affected switches are reported, the others are rightly empty
 ```
 ===== S1 =====
 
@@ -156,15 +163,54 @@ Dump-flow (only affected switches are reported, the others are empty as they sho
 [...] dl_dst=00:00:00:00:00:08 actions=output:"s10-eth1"
 
 ```
-##### Star:
-explanation of the cutted branches and why it should result like this
+### Star:
+In order to create a slice with a star topology, only the paths that connects the center to the edge switches S1, S4, S5 and S6 are preserved, any other connection is cut. The logic behind this slice is that any packet coming from a port that isn't part of the path that connects the device to the center is sent to the central switch of the virtual star topology otherwise the flooding algorithm is applied.
+The resulting topology is a star where the packets must always go through the center to arrive at their destination.
+
+![image info](https://raw.githubusercontent.com/elrich2610/Morphing-Slices/794837be2352d91d2fe320bb3c286427ff3cf161/star.svg)
+
 ```txt
-pingall star.py
+mininet> pingall
+*** Ping: testing ping reachability
+h1 -> X X h4 h5 h6 X X
+h2 -> X X X X X X X
+h3 -> X X X X X X X
+h4 -> h1 X X h5 h6 X X
+h5 -> h1 X X h4 h6 X X
+h6 -> h1 X X h4 h5 X X
+h7 -> X X X X X X X
+h8 -> X X X X X X X
+*** Results: 78% dropped (12/56 received)
+```
+Dump-flow 
+\*only some representative switches are reported
+
 ```
 
-##### Linear:
-A linear topology between the host 1-2-4 is the only connection preserved from the base topology.
-Those 3 hosts can ping eachother trough the channel S1-S2-S4.
+===== S1 =====
+
+[...] dl_dst=00:00:00:00:00:04 actions=output:"s1-eth4"
+[...] dl_dst=00:00:00:00:00:05 actions=output:"s1-eth4"
+[...] dl_dst=00:00:00:00:00:06 actions=output:"s1-eth4"
+
+===== S2 =====
+
+
+===== S9 =====
+[...] dl_dst=00:00:00:00:00:04 actions=output:"s9-eth4"
+[...] dl_dst=00:00:00:00:00:05 actions=output:"s9-eth4"
+[...] dl_dst=00:00:00:00:00:06 actions=output:"s9-eth4"
+
+
+```
+
+
+### Linear:
+In order to create a slice with a linear topology only the path that connects S1, S2, and S3 is preserved, any other connection is cut.
+The resulting topology connects H1, H2 and H4 through the S1-S2-S4 channel.
+
+![image info](https://raw.githubusercontent.com/elrich2610/Morphing-Slices/794837be2352d91d2fe320bb3c286427ff3cf161/linear.svg
+)
 ```txt
 mininet> pingall
 *** Ping: testing ping reachability
@@ -178,7 +224,8 @@ h7 -> X X X X X X X
 h8 -> X X X X X X X
 *** Results: 89% dropped (6/56 received)
 ```
-Dump-flow (only affected switches are reported, the others are empty as they should).
+Dump-flow  
+\*only affected switches are reported, the others are rightly empty
 ```
 ===== S1 =====
 
@@ -203,9 +250,13 @@ Dump-flow (only affected switches are reported, the others are empty as they sho
 
 ```
 
-##### Ring:
-This is an oriented topology so every packet can only travel in one direction.
-If the H1 wants to ping H3 it cannot simply go S1->S3, it must follow the full path S1->S2->S4->S5->S3 (as proven in the dump-flow output where only one dst is on a different port which is the HOST connected to that switch).
+### Ring:
+In order to create a slice with a ring topology all the connections involving S6, S7, S9 or S10 are cut and the output ports of each remaining switch are mapped based on the input port of the arriving packets.
+The resulting topology is an oriented ring where the packets travel in one direction only; this means that if for example H1 wants to ping H3,the packets can't simply  follow the S1->S3 path, they must follow the ring topology and take the S1->S2->S4->S5->S3 path.
+
+![image info](https://raw.githubusercontent.com/elrich2610/Morphing-Slices/48494969afcd059c64dc7cf197c247a6adb67b66/images/oriented%20ring.svg
+)
+
 ```txt
 mininet> pingall
 *** Ping: testing ping reachability
@@ -218,7 +269,8 @@ h6 -> X X X X X X X
 h7 -> X X X X X X X
 h8 -> X X X X X X X
 ```
-Dump-flow (only affected switches are reported, the others are empty as they should).
+Dump-flow 
+\*only affected switches are reported, the others are rightly empty
 ```
  ===== S1 =====
 
@@ -268,3 +320,4 @@ Dump-flow (only affected switches are reported, the others are empty as they sho
 
 [Mereuta Mihaela - 209035](https://github.com/plsmiha)
 
+[Rizzetto Alessandro - 209783](https://github.com/elrich2610)
