@@ -2,7 +2,7 @@
   <h2 align="center">Morphing Network Slicing with RYU</h2>
 
   <p align="center">
-  Andreatta - Mereuta - Rizzetto
+  Andreatta - Mereuta
   </p>
 </p>
 <br>
@@ -320,4 +320,3 @@ Dump-flow
 
 [Mereuta Mihaela - 209035](https://github.com/plsmiha)
 
-[Rizzetto Alessandro - 209783](https://github.com/elrich2610)
